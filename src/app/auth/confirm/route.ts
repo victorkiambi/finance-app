@@ -19,14 +19,46 @@ export async function GET(request: NextRequest) {
     if (token_hash && type) {
         const supabase = await createClient()
 
-        const { error } = await supabase.auth.verifyOtp({
+        // Verify the email
+        const { error: verificationError, data: { user } } = await supabase.auth.verifyOtp({
             type,
             token_hash,
         })
-        if (!error) {
-            redirectTo.searchParams.delete('next')
+
+        if (verificationError) {
+            redirectTo.pathname = '/error'
             return NextResponse.redirect(redirectTo)
         }
+
+        if (user) {
+            try {
+                // Create user record in our users table
+                const { error: insertError } = await supabase
+                    .from('users')
+                    .insert([
+                        {
+                            id: user.id,
+                            email: user.email,
+                            full_name: user.user_metadata.full_name,
+                            created_at: new Date().toISOString(),
+                            updated_at: new Date().toISOString(),
+                        }
+                    ])
+                    .select()
+                    .single()
+
+                if (insertError && insertError.code !== '23505') { // Ignore unique constraint violations
+                    console.error('Error creating user record:', insertError)
+                    // Continue with redirect even if user record creation fails
+                }
+            } catch (error) {
+                console.error('Error in user creation:', error)
+                // Continue with redirect even if user record creation fails
+            }
+        }
+
+        redirectTo.searchParams.delete('next')
+        return NextResponse.redirect(redirectTo)
     }
 
     // return the user to an error page with some instructions

@@ -16,6 +16,16 @@ export type Transaction = {
     category: string
 }
 
+export type Account = {
+    id: number
+    user_id: string
+    name: string
+    type: 'checking' | 'savings'
+    initial_balance: number
+    currency: string
+    created_at: string
+}
+
 export async function getOverviewData(userId: string): Promise<OverviewData> {
     const supabase = await createClient()
 
@@ -65,7 +75,7 @@ export async function getRecentTransactions(userId: string): Promise<Transaction
     return data as Transaction[]
 }
 
-export async function getAccountsForUser(userId: string) {
+export async function getAccounts(userId: string): Promise<Account[]> {
     const supabase = await createClient();
 
     const { data, error } = await supabase
@@ -73,11 +83,40 @@ export async function getAccountsForUser(userId: string) {
         .select('*')
         .eq('user_id', userId);
 
-    console.log('accounts', data)
+    if (error) {
+        throw new Error('Failed to fetch accounts')
+    }
+
+    console.log(`accounts: ${data?.forEach(account => console.log(account))}`)
+    return data || [];
+}
+
+export async function createAccount(
+    userId: string, 
+    name: string, 
+    type: 'checking' | 'savings',
+    initialBalance: number,
+    currency: string
+): Promise<Account> {
+    const supabase = await createClient();
+
+    const { data, error } = await supabase
+        .from('accounts')
+        .insert([
+            {
+                user_id: userId,
+                name,
+                type,
+                initial_balance: initialBalance,
+                current_balance: initialBalance,
+                currency,
+            }
+        ])
+        .select()
+        .single();
 
     if (error) {
-        console.error('Error fetching accounts:', error)
-        throw new Error('Failed to fetch accounts')
+        throw new Error(`Failed to create account: ${error.message}`)
     }
 
     return data;
